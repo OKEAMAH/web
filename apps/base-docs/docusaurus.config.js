@@ -122,10 +122,10 @@ const config = {
     [
       '@docusaurus/plugin-content-docs',
       {
-        id: 'base-camp',
-        path: 'base-camp',
-        routeBasePath: 'base-camp',
-        sidebarPath: require.resolve('./base-camp/sidebars.js'),
+        id: 'base-learn',
+        path: 'base-learn',
+        routeBasePath: 'base-learn',
+        sidebarPath: require.resolve('./base-learn/sidebars.js'),
       },
     ],
     [
@@ -195,20 +195,20 @@ const config = {
           eventContext: 'navbar',
         },
         {
-          to: '/base-camp/docs/welcome',
+          to: '/base-learn/docs/welcome',
           navposition: 'bottomLeft',
-          label: 'Camp',
+          label: 'Learn',
           items: [
             {
-              label: 'Learn',
-              to: '/base-camp/docs/welcome',
+              label: 'Learn to Build Onchain',
+              to: '/base-learn/docs/welcome',
               type: 'custom-dropdownLink',
               eventLabel: 'camp_learn',
               eventContext: 'navbar',
             },
             {
               label: 'Track your progress',
-              to: '/base-camp/progress',
+              to: '/base-learn/progress',
               type: 'custom-dropdownLink',
               eventLabel: 'camp_trackprogress',
               eventContext: 'navbar',
@@ -250,7 +250,6 @@ const config = {
           label: 'Bridge',
           navposition: 'topRight',
           to: 'https://bridge.base.org/',
-          target: '_blank',
           type: 'custom-navbarLink',
           eventLabel: 'bridge',
           eventContext: 'navbar',
@@ -316,6 +315,49 @@ const config = {
               eventContext: 'navbar',
             },
           ],
+        },
+        {
+          type: 'dropdown',
+          label: 'Socials',
+          navposition: 'topRight',
+          items: [
+            {
+              label: 'Farcaster',
+              icon: 'farcaster',
+              type: 'custom-dropdownLink',
+              target: '_blank',
+              to: "https://warpcast.com/~/channel/base",
+              eventLabel: 'socials_farcaster',
+              eventContext: 'navbar',
+            },
+            {
+              label: 'Discord',
+              icon: 'discord',
+              type: 'custom-dropdownLink',
+              target: '_blank',
+              to: "https://discord.com/invite/buildonbase",
+              eventLabel: 'socials_discord',
+              eventContext: 'navbar',
+            },
+            {
+              label: 'Twitter',
+              icon: 'twitter',
+              type: 'custom-dropdownLink',
+              target: '_blank',
+              to: "https://www.twitter.com/base",
+              eventLabel: 'socials_twitter',
+              eventContext: 'navbar',
+            },
+            {
+              label: 'Github',
+              icon: 'github',
+              type: 'custom-dropdownLink',
+              target: '_blank',
+              to: "https://www.github.com/base-org",
+              eventLabel: 'socials_github',
+              eventContext: 'navbar',
+            },
+          ]
         },
         // Langauge selection dropdown will be supported in the future
         // {

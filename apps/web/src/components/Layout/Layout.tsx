@@ -1,10 +1,9 @@
-import { ReactElement, useMemo } from 'react';
+import { CookieBanner } from '@coinbase/cookie-banner';
 import localFont from 'next/font/local';
 import { useRouter } from 'next/router';
-import { CookieBanner } from '@coinbase/cookie-banner';
-
-import { Nav } from './Nav/Nav';
+import { ReactElement, useMemo } from 'react';
 import { Footer } from './Footer/Footer';
+import { Nav } from './Nav/Nav';
 
 const coinbaseDisplay = localFont({
   src: [
@@ -67,7 +66,7 @@ const britney = localFont({
   variable: '--font-britney',
 });
 
-const cookieBannerTheme = {
+export const cookieBannerTheme = {
   colors: {
     primary: '#1652F0',
     positive: '#05B169',
@@ -117,6 +116,7 @@ const BLACK_NAV_PATHS = [
   '/cookie-policy',
   '/third-party-cookies',
   '/onchainsummer',
+  '/name',
 ];
 
 export function Layout({ children }: LayoutProps) {

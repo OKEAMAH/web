@@ -9,7 +9,7 @@ import { Features } from '../src/components/Features/Features';
 import { Hero } from '../src/components/Home/Hero';
 import { JoinTheCommunity } from '../src/components/JoinTheCommunity/JoinTheCommunity';
 import { Partnerships } from '../src/components/Partnerships/Partnerships';
-import { FrameButtonMetadata, FrameMetadata } from '@coinbase/onchainkit';
+import { FrameButtonMetadata, FrameMetadata } from '@coinbase/onchainkit/frame';
 import { useMemo } from 'react';
 
 export default function Home() {
@@ -31,13 +31,6 @@ export default function Home() {
 
   return (
     <>
-      <Head>
-        <title>Base</title>
-        <meta
-          content="Base is a secure, low-cost, builder-friendly Ethereum L2 built to bring the next billion users onchain."
-          name="description"
-        />
-      </Head>
       <FrameMetadata
         buttons={buttons}
         image="https://base.org/images/base-open-graph.png"

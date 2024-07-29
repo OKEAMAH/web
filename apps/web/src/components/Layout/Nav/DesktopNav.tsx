@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { AnimatePresence, motion, cubicBezier } from 'framer-motion';
 import Link from 'next/link';
 
-import useClickAway from '../../../utils/hooks/useClickAway';
+import useClickAway from '../../../hooks/useClickAway';
 
 import { Icon } from '../../Icon/Icon';
 import { bridgeUrl, docsUrl } from 'apps/web/src/constants';
@@ -124,9 +124,11 @@ function IconLink({
 
 function DesktopNav({ color }: DesktopNavProps) {
   return (
-    <div className="hidden h-full w-fit flex-grow flex-row items-center items-center justify-between lg:flex">
+    <div className="hidden h-full w-fit flex-grow flex-row items-center justify-between lg:flex">
       <Dropdown label="Ecosystem" color={color}>
         <DropdownLink href="/ecosystem" label="Apps" color={color} />
+        {/* todo ECO-101: add this back for GA */}
+        {/* <DropdownLink href="/names" label="Names" color={color} /> */}
         <DropdownLink
           href="https://paragraph.xyz/@grants.base.eth/calling-based-builders"
           label="Grants"
@@ -139,14 +141,12 @@ function DesktopNav({ color }: DesktopNavProps) {
         className={`inline-flex items-center font-mono text-xl ${
           color === 'black' ? 'text-black' : 'text-white'
         }`}
-        target="_blank"
-        rel="noreferrer noopener"
       >
         Bridge
       </a>
       <Dropdown label="Developers" color={color}>
         <DropdownLink href={docsUrl} label="Docs" color={color} externalLink />
-        <DropdownLink href="https://base.org/camp" label="Learn" color={color} externalLink />
+        <DropdownLink href="https://base.org/learn" label="Learn" color={color} externalLink />
         <DropdownLink
           href="https://base.blockscout.com/"
           label="Block Explorer"

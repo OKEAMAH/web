@@ -1,5 +1,8 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import '@rainbow-me/rainbowkit/styles.css';
+import { useColorMode } from '@docusaurus/theme-common';
 
 import DefaultNavbarItem from '@theme/NavbarItem/DefaultNavbarItem';
 import DropdownNavbarItem from '@theme/NavbarItem/DropdownNavbarItem';
@@ -10,11 +13,18 @@ import DocNavbarItem from '@theme/NavbarItem/DocNavbarItem';
 import DocSidebarNavbarItem from '@theme/NavbarItem/DocSidebarNavbarItem';
 import DocsVersionNavbarItem from '@theme/NavbarItem/DocsVersionNavbarItem';
 import DocsVersionDropdownNavbarItem from '@theme/NavbarItem/DocsVersionDropdownNavbarItem';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import '@rainbow-me/rainbowkit/styles.css';
+
+import sanitizeEventString from 'base-ui/utils/sanitizeEventString';
+import logEvent, {
+  ActionType,
+  AnalyticsEventImportance,
+  ComponentType,
+  identify,
+} from 'base-ui/utils/logEvent';
+
 import styles from './styles.module.css';
 import { WalletAvatar } from '../../components/WalletAvatar';
-import logEvent, { ActionType, AnalyticsEventImportance, ComponentType,  identify } from "base-ui/utils/logEvent";
+import Icon from '../../components/Icon';
 
 export const CustomConnectButton = ({ className }) => {
   return (
@@ -22,7 +32,7 @@ export const CustomConnectButton = ({ className }) => {
       {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
         const ready = mounted;
         const connected = ready && account && chain;
-        const { address } = useAccount();
+        const { address, connector } = useAccount();
 
         useEffect(() => {
           if (address) {
@@ -32,6 +42,7 @@ export const CustomConnectButton = ({ className }) => {
                 action: ActionType.change,
                 context: 'navbar',
                 address,
+                wallet_type: sanitizeEventString(connector?.name),
               },
               AnalyticsEventImportance.low,
             );
@@ -144,8 +155,8 @@ export const CustomNavbarLink = (props) => {
     <a
       href={props.to}
       target={props.target ?? '_self'}
-      className='navbar__item navbar__link'
-      style={{ cursor: 'pointer'}}
+      className="navbar__item navbar__link"
+      style={{ cursor: 'pointer' }}
       onClick={() => {
         logEvent(
           props.eventLabel,
@@ -154,23 +165,32 @@ export const CustomNavbarLink = (props) => {
             componentType: ComponentType.link,
             context: props.eventContext,
           },
-          AnalyticsEventImportance.high
-        )
+          AnalyticsEventImportance.high,
+        );
       }}
     >
       {props.label}
     </a>
-  )
-}
+  );
+};
 
 export const CustomDropdownLink = (props) => {
+  const [iconColor, setIconColor] = useState('');
+  const { colorMode } = useColorMode();
+
+  useEffect(() => {
+    setIconColor(
+      colorMode === 'dark' ? 'black' : 'white'
+    )
+  }, [colorMode]);
+
   return (
     <li>
       <a
         href={props.to}
         target={props.target ?? '_self'}
-        className='dropdown__link'
-        style={{ cursor: 'pointer'}}
+        className="dropdown__link"
+        style={{ cursor: 'pointer' }}
         onClick={() => {
           logEvent(
             props.eventLabel,
@@ -179,15 +199,18 @@ export const CustomDropdownLink = (props) => {
               componentType: ComponentType.link,
               context: props.eventContext,
             },
-            AnalyticsEventImportance.high
-          )
+            AnalyticsEventImportance.high,
+          );
         }}
       >
-        {props.label}
+        <div className="dropdown__link--content">
+          {props.icon && <Icon name={props.icon} width="24" height="24" color={iconColor} />}
+          <span>{props.label}</span>
+        </div>
       </a>
     </li>
-  )
-}
+  );
+};
 
 const ComponentTypes = {
   default: DefaultNavbarItem,

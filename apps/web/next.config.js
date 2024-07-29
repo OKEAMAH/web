@@ -76,6 +76,8 @@ const contentSecurityPolicy = {
   ],
   'connect-src': [
     "'self'",
+    'https://blob.vercel-storage.com', // Vercel File storage
+    'https://zku9gdedgba48lmr.public.blob.vercel-storage.com', // Vercel File storage
     walletconnectDomains,
     sprigDomains,
     greenhouseDomains,
@@ -84,19 +86,30 @@ const contentSecurityPolicy = {
     'wss://www.walletlink.org/rpc', // coinbase wallet connection
     'https://analytics-service-dev.cbhq.net',
     'mainnet.base.org',
+    'sepolia.base.org',
     'https://cloudflare-eth.com',
     'https://i.seadn.io/', // ens avatars
     'https://api.opensea.io', // enables getting ENS avatars
+    'https://ipfs.io', // ipfs ens avatar resolution
+    'wss://www.walletlink.org',
+    'https://base.easscan.org/graphql',
+    'https://api.guild.xyz/',
     isLocalDevelopment ? 'ws://localhost:3000/' : '',
     isLocalDevelopment ? 'http://localhost:3000/' : '',
+    'https://flag.lab.amplitude.com/sdk/v2/flags',
+    'https://api.lab.amplitude.com/sdk/v2/vardata',
   ],
   'frame-ancestors': ["'self'", baseXYZDomains],
   'form-action': ["'self'", baseXYZDomains],
   'img-src': [
     "'self'",
+    'blob:',
+    'https://blob.vercel-storage.com', // Vercel File storage
+    'https://zku9gdedgba48lmr.public.blob.vercel-storage.com', // Vercel File storage
     'data:',
     'https://*.walletconnect.com/', // WalletConnect
     'https://i.seadn.io/', // ens avatars
+    'https://ipfs.io', // ipfs ens avatar resolution
   ],
 };
 
@@ -146,11 +159,45 @@ module.exports = extendBaseConfig(
       locales: ['en'],
       defaultLocale: 'en',
     },
+    webpack: (config, { buildId, dev, isServer, defaultLoaders, nextRuntime, webpack }) => {
+      config.module.rules.push({
+        test: /\.webm/,
+        use: [
+          {
+            loader: 'file-loader',
+            options: {
+              name: '[name][hash].[ext]',
+              outputPath: 'static/assets/webm/',
+              publicPath: '/_next/static/assets/webm/',
+            },
+          },
+        ],
+      });
+      return config;
+    },
     images: {
       remotePatterns: [
         {
           protocol: 'https',
           hostname: 'i.seadn.io',
+        },
+        {
+          protocol: 'https',
+          hostname: 'ipfs.io',
+        },
+        {
+          protocol: 'https',
+          hostname: 'cf-ipfs.com',
+        },
+        {
+          protocol: 'https',
+          hostname: 'blob.vercel-storage.com',
+          port: '',
+        },
+        {
+          protocol: 'https',
+          hostname: 'zku9gdedgba48lmr.public.blob.vercel-storage.com',
+          port: '',
         },
       ],
     },
