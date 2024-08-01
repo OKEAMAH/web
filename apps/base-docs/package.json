@@ -19,7 +19,7 @@
   "dependencies": {
     "@coinbase/cookie-banner": "^1.0.3",
     "@coinbase/cookie-manager": "^1.1.1",
-    "@docusaurus/core": "2.4.3",
+    "@docusaurus/core": "3.4.0",
     "@docusaurus/preset-classic": "2.4.3",
     "@mdx-js/react": "^1.6.22",
     "@microsoft/fetch-event-source": "^2.0.1",
@@ -45,7 +45,7 @@
     "wagmi": "^2.5.19"
   },
   "devDependencies": {
-    "@docusaurus/core": "2.4.3",
+    "@docusaurus/core": "3.4.0",
     "@docusaurus/logger": "2.4.3",
     "@docusaurus/module-type-aliases": "2.4.3",
     "@docusaurus/plugin-client-redirects": "^2.4.3",
