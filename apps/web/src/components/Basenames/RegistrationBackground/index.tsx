@@ -28,7 +28,7 @@ export default function RegistrationBackground() {
     'pointer-events-none absolute inset-0 w-full h-full -z-10 bg-[#025cfe]',
   );
 
-  const videoClasses = classNames('absolute w-full h-full mt-[24px] object-cover');
+  const videoClasses = classNames('absolute w-full h-full object-cover motion-reduce:hidden');
 
   return (
     <>
@@ -69,8 +69,8 @@ export default function RegistrationBackground() {
           enterFrom="scale-0"
           enterTo="scale-100"
         >
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video autoPlay className={videoClasses} loop>
+          {}
+          <video autoPlay className={videoClasses} loop muted playsInline>
             <source src={globe} type="video/webm" />
           </video>
         </Transition>
@@ -91,8 +91,8 @@ export default function RegistrationBackground() {
       >
         {/* TODO: Lottie animation file */}
 
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video autoPlay className={videoClasses} loop>
+        {}
+        <video autoPlay className={videoClasses} loop muted playsInline>
           <source src={vortex} type="video/webm" />
         </video>
       </Transition>
@@ -112,8 +112,8 @@ export default function RegistrationBackground() {
       >
         {/* TODO: Lottie animation file */}
 
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <video autoPlay className={videoClasses} loop>
+        {}
+        <video autoPlay className={videoClasses} loop muted playsInline>
           <source src={fireworks} type="video/webm" />
         </video>
       </Transition>

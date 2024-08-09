@@ -1,3 +1,4 @@
+'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { Button, ButtonVariants } from 'apps/web/src/components/Button/Button';
 import { gradientBgMap, textGradientMap, Verb, verbs } from 'apps/web/src/styles/hero';
@@ -120,7 +121,7 @@ export function Hero() {
                   </Button>
                 </Link>
               </div>
-              <p className=" block w-full font-mono uppercase text-white lg:hidden">
+              <p className="block w-full font-mono uppercase text-white lg:hidden">
                 Powered by Op Stack
               </p>
             </div>

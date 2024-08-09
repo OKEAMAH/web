@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 const defaultTheme = require('tailwindcss/defaultTheme');
+import path from 'node:path';
 
 module.exports = {
   content: [
@@ -9,6 +10,7 @@ module.exports = {
 
     // Or if using `src` directory:
     './src/**/*.{js,ts,jsx,tsx}',
+    path.join(path.dirname(require.resolve('@coinbase/onchainkit')), '**/*.js'),
   ],
   theme: {
     // https://www.figma.com/design/AH4N0fma2EvI30IltjBGPy/%E2%9C%A8-CDS-Styles-(Variables)?node-id=46-168
@@ -535,11 +537,27 @@ module.exports = {
           '50%': { transform: 'translateX(0) rotate(6deg)' },
           '100%': { transform: 'translateX(0) rotate(6deg)' },
         },
+        longslide: {
+          '0%': { transform: 'translateX(-23rem)' },
+          '100%': { transform: 'translateX(13rem)' },
+        },
       },
       animation: {
         wiggle: 'wiggle 3s linear infinite',
         bounce: 'bounce 1s ease-in-out infinite',
-        slide: 'slide 1s linear infinite',
+        slide: 'slide 1s ease-in-out infinite',
+        longslide: 'longslide 2s linear infinite',
+      },
+      zIndex: {
+        1: '1',
+        2: '2',
+        3: '3',
+        4: '4',
+        5: '5',
+        6: '6',
+        7: '7',
+        8: '8',
+        9: '9',
       },
     },
   },

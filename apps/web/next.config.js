@@ -4,6 +4,9 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 
 const isProdEnv = process.env.NODE_ENV === 'production';
 
+// Can't import this from apps/web/src/utils/images.ts for some reason
+const allowedImageRemoteDomains = ['zku9gdedgba48lmr.public.blob.vercel-storage.com'];
+
 const baseConfig = {
   // Enable advanced features
   compiler: {
@@ -74,6 +77,7 @@ const contentSecurityPolicy = {
     ccaLiteDomains,
     walletconnectDomains,
   ],
+  'worker-src': ["'self'"],
   'connect-src': [
     "'self'",
     'https://blob.vercel-storage.com', // Vercel File storage
@@ -83,6 +87,8 @@ const contentSecurityPolicy = {
     greenhouseDomains,
     ccaLiteDomains,
     ccaDomain,
+    'https://enhanced-provider.rainbow.me',
+    'https://*.coinbase.com',
     'wss://www.walletlink.org/rpc', // coinbase wallet connection
     'https://analytics-service-dev.cbhq.net',
     'mainnet.base.org',
@@ -91,6 +97,7 @@ const contentSecurityPolicy = {
     'https://i.seadn.io/', // ens avatars
     'https://api.opensea.io', // enables getting ENS avatars
     'https://ipfs.io', // ipfs ens avatar resolution
+    'https://cloudflare-ipfs.com', // ipfs Cloudfare ens avatar resolution
     'wss://www.walletlink.org',
     'https://base.easscan.org/graphql',
     'https://api.guild.xyz/',
@@ -98,18 +105,20 @@ const contentSecurityPolicy = {
     isLocalDevelopment ? 'http://localhost:3000/' : '',
     'https://flag.lab.amplitude.com/sdk/v2/flags',
     'https://api.lab.amplitude.com/sdk/v2/vardata',
+    'https://browser-intake-datadoghq.com', // datadog
+    'https://*.datadoghq.com', //datadog
+    'https://translate.googleapis.com', // Let user translate our website
   ],
   'frame-ancestors': ["'self'", baseXYZDomains],
   'form-action': ["'self'", baseXYZDomains],
   'img-src': [
     "'self'",
     'blob:',
-    'https://blob.vercel-storage.com', // Vercel File storage
-    'https://zku9gdedgba48lmr.public.blob.vercel-storage.com', // Vercel File storage
     'data:',
     'https://*.walletconnect.com/', // WalletConnect
     'https://i.seadn.io/', // ens avatars
     'https://ipfs.io', // ipfs ens avatar resolution
+    'https://cloudflare-ipfs.com', // ipfs Cloudfare ens avatar resolution
   ],
 };
 
@@ -120,7 +129,7 @@ const cspObjectToString = Object.entries(contentSecurityPolicy).reduce((acc, [ke
 const securityHeaders = [
   {
     key: 'cache-control',
-    value: 'no-store',
+    value: 'no-cache',
   },
   {
     key: 'content-security-policy',
@@ -173,33 +182,17 @@ module.exports = extendBaseConfig(
           },
         ],
       });
+
+      config.externals.push('pino-pretty');
       return config;
     },
     images: {
-      remotePatterns: [
-        {
+      remotePatterns: allowedImageRemoteDomains.map((hostname) => {
+        return {
           protocol: 'https',
-          hostname: 'i.seadn.io',
-        },
-        {
-          protocol: 'https',
-          hostname: 'ipfs.io',
-        },
-        {
-          protocol: 'https',
-          hostname: 'cf-ipfs.com',
-        },
-        {
-          protocol: 'https',
-          hostname: 'blob.vercel-storage.com',
-          port: '',
-        },
-        {
-          protocol: 'https',
-          hostname: 'zku9gdedgba48lmr.public.blob.vercel-storage.com',
-          port: '',
-        },
-      ],
+          hostname,
+        };
+      }),
     },
     async headers() {
       return [
@@ -236,6 +229,21 @@ module.exports = extendBaseConfig(
         {
           source: '/registry-edit',
           destination: 'https://buildonbase.deform.cc/registry-edit/',
+          permanent: true,
+        },
+        {
+          source: '/name/:path.base.eth',
+          destination: '/name/:path',
+          permanent: true,
+        },
+        {
+          source: '/names/:path',
+          destination: '/name/:path',
+          permanent: true,
+        },
+        {
+          source: '/name',
+          destination: '/names',
           permanent: true,
         },
       ];

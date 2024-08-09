@@ -1,12 +1,15 @@
 import { useAnalytics } from 'apps/web/contexts/Analytics';
+import { useErrors } from 'apps/web/contexts/Errors';
 import L2ResolverAbi from 'apps/web/src/abis/L2Resolver';
-import abi from 'apps/web/src/abis/RegistrarControllerABI';
-import {
-  USERNAME_L2_RESOLVER_ADDRESSES,
-  USERNAME_REGISTRAR_CONTROLLER_ADDRESSES,
-} from 'apps/web/src/addresses/usernames';
+import { USERNAME_L2_RESOLVER_ADDRESSES } from 'apps/web/src/addresses/usernames';
 import useBasenameChain from 'apps/web/src/hooks/useBasenameChain';
-import { formatBaseEthDomain, normalizeEnsDomainName } from 'apps/web/src/utils/usernames';
+import {
+  formatBaseEthDomain,
+  IS_EARLY_ACCESS,
+  normalizeEnsDomainName,
+  REGISTER_CONTRACT_ABI,
+  REGISTER_CONTRACT_ADDRESSES,
+} from 'apps/web/src/utils/usernames';
 import { ActionType } from 'libs/base-ui/utils/logEvent';
 import { useCallback, useMemo } from 'react';
 import { encodeFunctionData, namehash } from 'viem';
@@ -21,7 +24,6 @@ function secondsInYears(years: number): bigint {
 type UseRegisterNameCallbackReturnValue = {
   callback: () => Promise<void>;
   data: `0x${string}` | undefined;
-  callBatchId: string | undefined;
   isPending: boolean;
   error: string | undefined | null;
 };
@@ -33,16 +35,23 @@ export function useRegisterNameCallback(
   discountKey?: `0x${string}`,
   validationData?: `0x${string}`,
 ): UseRegisterNameCallbackReturnValue {
-  const { address, chainId, isConnected } = useAccount();
+  const { address, chainId, isConnected, connector } = useAccount();
   const { basenameChain } = useBasenameChain();
+  const { logError } = useErrors();
   const {
-    data: callBatchId,
     writeContractsAsync,
     isPending: paymasterIsPending,
     error: paymasterError,
   } = useWriteContracts();
+
+  const isCoinbaseSmartWallet = connector?.id === 'coinbase';
+  const paymasterEnabled = isCoinbaseSmartWallet;
+
   const { data, writeContractAsync, isPending, error } = useWriteContract();
-  const { data: availableCapacities } = useCapabilities({ account: address });
+  const { data: availableCapacities } = useCapabilities({
+    account: address,
+    query: { enabled: isConnected && paymasterEnabled },
+  });
 
   const capabilities = useMemo(() => {
     if (!isConnected || !chainId || !availableCapacities) {
@@ -53,7 +62,6 @@ export function useRegisterNameCallback(
       return {
         paymasterService: {
           // url: `${document.location.origin}/api/paymaster`
-          url: 'https://api.developer.coinbase.com/rpc/v1/base-sepolia/1IhTcPOmhK5aEq-4WqRZMJoOh0oPenD2',
         },
       };
     }
@@ -65,9 +73,12 @@ export function useRegisterNameCallback(
   const isDiscounted = Boolean(discountKey && validationData);
   const { logEventWithContext } = useAnalytics();
 
-  // TODO: I think we could pass arguments to this function instead of the hook
   const registerName = useCallback(async () => {
     if (!address) return;
+    if (chainId !== basenameChain.id) {
+      await switchChainAsync({ chainId: basenameChain.id });
+      return;
+    }
 
     const addressData = encodeFunctionData({
       abi: L2ResolverAbi,
@@ -97,14 +108,12 @@ export function useRegisterNameCallback(
     logEventWithContext('register_name_transaction_initiated', ActionType.click);
 
     try {
-      await switchChainAsync({ chainId: basenameChain.id });
-
       if (!capabilities || Object.keys(capabilities).length === 0) {
         await writeContractAsync({
-          abi,
-          address: USERNAME_REGISTRAR_CONTROLLER_ADDRESSES[basenameChain.id],
+          abi: REGISTER_CONTRACT_ABI,
+          address: REGISTER_CONTRACT_ADDRESSES[basenameChain.id],
           chainId: basenameChain.id,
-          functionName: 'discountedRegister',
+          functionName: isDiscounted || IS_EARLY_ACCESS ? 'discountedRegister' : 'register',
           // @ts-expect-error isDiscounted is sufficient guard for discountKey and validationData presence
           args: isDiscounted ? [registerRequest, discountKey, validationData] : [registerRequest],
           value,
@@ -113,12 +122,13 @@ export function useRegisterNameCallback(
         await writeContractsAsync({
           contracts: [
             {
-              address: USERNAME_REGISTRAR_CONTROLLER_ADDRESSES[basenameChain.id],
-              abi: abi,
-              functionName: 'discountedRegister',
+              abi: REGISTER_CONTRACT_ABI,
+              address: REGISTER_CONTRACT_ADDRESSES[basenameChain.id],
+              functionName: isDiscounted || IS_EARLY_ACCESS ? 'discountedRegister' : 'register',
               args: isDiscounted
                 ? [registerRequest, discountKey, validationData]
                 : [registerRequest],
+              // @ts-expect-error writeContractsAsync is incorrectly typed to not accept value
               value,
             },
           ],
@@ -127,15 +137,17 @@ export function useRegisterNameCallback(
         });
       }
     } catch (e) {
-      console.error('failed to register name', e);
+      logError(e, 'Register name transaction canceled');
       logEventWithContext('register_name_transaction_canceled', ActionType.change);
     }
   }, [
     address,
+    chainId,
     basenameChain.id,
     capabilities,
     discountKey,
     isDiscounted,
+    logError,
     logEventWithContext,
     name,
     normalizedName,
@@ -150,7 +162,6 @@ export function useRegisterNameCallback(
   return {
     callback: registerName,
     data,
-    callBatchId,
     isPending: isPending ?? paymasterIsPending,
     // @ts-expect-error error will be string renderable
     error: error ?? paymasterError,

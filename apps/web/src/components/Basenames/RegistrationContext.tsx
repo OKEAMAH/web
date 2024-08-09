@@ -1,5 +1,6 @@
 'use client';
 import { useAnalytics } from 'apps/web/contexts/Analytics';
+import { useErrors } from 'apps/web/contexts/Errors';
 import {
   DiscountData,
   findFirstValidDiscount,
@@ -7,21 +8,24 @@ import {
 } from 'apps/web/src/hooks/useAggregatedDiscountValidators';
 import useBaseEnsName from 'apps/web/src/hooks/useBaseEnsName';
 import useBasenameChain from 'apps/web/src/hooks/useBasenameChain';
-import { Discount, isValidDiscount } from 'apps/web/src/utils/usernames';
+import { Discount, formatBaseEthDomain, isValidDiscount } from 'apps/web/src/utils/usernames';
 import { ActionType } from 'libs/base-ui/utils/logEvent';
+import { useRouter } from 'next/navigation';
 import {
   Dispatch,
   ReactNode,
   SetStateAction,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from 'react';
+import { useInterval } from 'usehooks-ts';
 import { Address, TransactionReceipt } from 'viem';
+import { base } from 'viem/chains';
 import { useAccount, useWaitForTransactionReceipt } from 'wagmi';
-import { useCallsStatus } from 'wagmi/experimental';
 
 export enum RegistrationSteps {
   Search = 'search',
@@ -42,8 +46,7 @@ export type RegistrationContextProps = {
   setSelectedName: Dispatch<SetStateAction<string>>;
   registerNameTransactionHash: `0x${string}` | undefined;
   setRegisterNameTransactionHash: Dispatch<SetStateAction<`0x${string}` | undefined>>;
-  registerNameCallsBatchId: string;
-  setRegisterNameCallsBatchId: Dispatch<SetStateAction<string>>;
+  redirectToProfile: () => void;
   loadingDiscounts: boolean;
   discount: DiscountData | undefined;
   allActiveDiscounts: Set<Discount>;
@@ -72,8 +75,7 @@ export const RegistrationContext = createContext<RegistrationContextProps>({
   setRegisterNameTransactionHash: function () {
     return undefined;
   },
-  registerNameCallsBatchId: '',
-  setRegisterNameCallsBatchId: function () {
+  redirectToProfile: function () {
     return undefined;
   },
   loadingDiscounts: true,
@@ -99,14 +101,21 @@ export default function RegistrationProvider({ children }: RegistrationProviderP
     RegistrationSteps.Search,
   );
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [registrationStep]);
+
   const { basenameChain } = useBasenameChain();
+
+  const router = useRouter();
 
   // Analytics
   const { logEventWithContext } = useAnalytics();
+  const { logError } = useErrors();
 
   // Web3 data
   const { address } = useAccount();
-  const { refetch: baseEnsNameRefetch } = useBaseEnsName({
+  const { data: currentAddressName, refetch: baseEnsNameRefetch } = useBaseEnsName({
     address,
   });
 
@@ -142,34 +151,41 @@ export default function RegistrationProvider({ children }: RegistrationProviderP
       enabled: !!registerNameTransactionHash,
     },
   });
-  const [registerNameCallsBatchId, setRegisterNameCallsBatchId] = useState<string>('');
 
-  const {
-    data: callsData,
-    isFetching: callsIsFetching,
-    isSuccess: callsIsSuccess,
-    error: callsError,
-  } = useCallsStatus({
-    id: registerNameCallsBatchId,
-    query: {
-      enabled: !!registerNameCallsBatchId,
-    },
-  });
+  useInterval(() => {
+    if (registrationStep !== RegistrationSteps.Pending) {
+      return;
+    }
+    baseEnsNameRefetch()
+      .then(() => {
+        const [extractedName] = (currentAddressName ?? '').split('.');
+        if (extractedName === selectedName && registrationStep === RegistrationSteps.Pending) {
+          setRegistrationStep(RegistrationSteps.Success);
+        }
+      })
+      .catch((error) => {
+        logError(error, 'Failed to refetch basename');
+      });
+  }, 1500);
+
+  const redirectToProfile = useCallback(() => {
+    if (basenameChain.id === base.id) {
+      router.push(`name/${selectedName}`);
+    } else {
+      router.push(`name/${formatBaseEthDomain(selectedName, basenameChain.id)}`);
+    }
+  }, [basenameChain.id, router, selectedName]);
 
   useEffect(() => {
-    if (transactionIsFetching || callsIsFetching) {
+    if (transactionIsFetching && registrationStep === RegistrationSteps.Claim) {
       logEventWithContext('register_name_transaction_processing', ActionType.change);
-
       setRegistrationStep(RegistrationSteps.Pending);
     }
 
-    if (transactionIsSuccess) {
+    if (transactionIsSuccess && registrationStep === RegistrationSteps.Pending) {
       if (transactionData.status === 'success') {
         logEventWithContext('register_name_transaction_success', ActionType.change);
-        // Reload current ENS name
-        baseEnsNameRefetch()
-          .then(() => setRegistrationStep(RegistrationSteps.Success))
-          .catch(() => {});
+        setRegistrationStep(RegistrationSteps.Success);
       }
 
       if (transactionData.status === 'reverted') {
@@ -178,27 +194,10 @@ export default function RegistrationProvider({ children }: RegistrationProviderP
         });
       }
     }
-    if (callsIsSuccess && callsData) {
-      const successCall = callsData.receipts?.find((receipt) => receipt.status === 'success');
-      if (successCall) {
-        logEventWithContext('register_name_transaction_success', ActionType.change);
-        baseEnsNameRefetch()
-          .then(() => setRegistrationStep(RegistrationSteps.Success))
-          .catch(() => {});
-      } else {
-        const failCall = callsData.receipts?.find((receipt) => receipt.status !== 'success');
-        logEventWithContext('register_name_transaction_reverted', ActionType.change, {
-          error: `Smart wallet transaction reverted: ${failCall?.transactionHash}`,
-        });
-      }
-    }
   }, [
     baseEnsNameRefetch,
-    callsData,
-    callsIsFetching,
-    callsIsSuccess,
     logEventWithContext,
-    setRegistrationStep,
+    registrationStep,
     transactionData,
     transactionIsFetching,
     transactionIsSuccess,
@@ -221,6 +220,13 @@ export default function RegistrationProvider({ children }: RegistrationProviderP
     logEventWithContext('selected_name', ActionType.change);
   }, [logEventWithContext, selectedName]);
 
+  // Log error
+  useEffect(() => {
+    if (transactionError) {
+      logError(transactionError, 'Failed to fetch the transaction receipt');
+    }
+  }, [logError, transactionError]);
+
   const values = useMemo(() => {
     return {
       searchInputFocused,
@@ -233,20 +239,18 @@ export default function RegistrationProvider({ children }: RegistrationProviderP
       setRegistrationStep,
       registerNameTransactionHash,
       setRegisterNameTransactionHash,
-      registerNameCallsBatchId,
-      setRegisterNameCallsBatchId,
+      redirectToProfile,
       loadingDiscounts,
       discount,
       allActiveDiscounts,
       transactionData,
-      transactionError: transactionError ?? callsError,
+      transactionError,
     };
   }, [
     allActiveDiscounts,
-    callsError,
     discount,
     loadingDiscounts,
-    registerNameCallsBatchId,
+    redirectToProfile,
     registerNameTransactionHash,
     registrationStep,
     searchInputFocused,

@@ -1,4 +1,5 @@
 import { useAnalytics } from 'apps/web/contexts/Analytics';
+import { useErrors } from 'apps/web/contexts/Errors';
 import {
   registrationTransitionDuration,
   useRegistration,
@@ -20,11 +21,9 @@ import {
   UsernameTextRecords,
   UsernameTextRecordKeys,
   textRecordsSocialFieldsEnabled,
-  formatBaseEthDomain,
 } from 'apps/web/src/utils/usernames';
 import classNames from 'classnames';
 import { ActionType } from 'libs/base-ui/utils/logEvent';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useAccount, useWaitForTransactionReceipt } from 'wagmi';
 
@@ -37,9 +36,9 @@ export enum FormSteps {
 export default function RegistrationProfileForm() {
   const [currentFormStep, setCurrentFormStep] = useState<FormSteps>(FormSteps.Description);
   const [transitionStep, setTransitionStep] = useState<boolean>(false);
-  const { selectedName } = useRegistration();
+  const { logError } = useErrors();
+  const { selectedName, redirectToProfile } = useRegistration();
   const { address } = useAccount();
-  const router = useRouter();
   const { logEventWithContext } = useAnalytics();
   const { basenameChain } = useBasenameChain();
   const { data: baseEnsName } = useBaseEnsName({
@@ -91,9 +90,11 @@ export default function RegistrationProfileForm() {
 
       refetchExistingTextRecords()
         .then(() => {
-          router.push(`name/${formatBaseEthDomain(selectedName, basenameChain.id)}`);
+          redirectToProfile();
         })
-        .catch(() => {});
+        .catch((error) => {
+          logError(error, 'Failed to refetch text records');
+        });
     }
 
     if (transactionData.status === 'reverted') {
@@ -104,11 +105,12 @@ export default function RegistrationProfileForm() {
   }, [
     logEventWithContext,
     refetchExistingTextRecords,
-    router,
     baseEnsName,
     transactionData,
     selectedName,
     basenameChain.id,
+    redirectToProfile,
+    logError,
   ]);
 
   useEffect(() => {
@@ -165,20 +167,21 @@ export default function RegistrationProfileForm() {
               logEventWithContext('update_text_records_transaction_approved', ActionType.change);
             } else {
               // no text records had to be updated, simply go to profile
-              router.push(`name/${formatBaseEthDomain(selectedName, basenameChain.id)}`);
+              redirectToProfile();
             }
           })
-          .catch(console.error);
+          .catch((error) => {
+            logError(error, 'Failed to write text records');
+          });
       }
 
       event.preventDefault();
     },
     [
-      basenameChain.id,
       currentFormStep,
+      logError,
       logEventWithContext,
-      router,
-      selectedName,
+      redirectToProfile,
       textRecords,
       transitionFormOpacity,
       writeTextRecords,
