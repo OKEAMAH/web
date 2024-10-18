@@ -1,64 +1,56 @@
-import ProfileProviders from 'apps/web/app/(basenames)/name/[username]/ProfileProviders';
-import { Metadata } from 'next';
-import { base } from 'viem/chains';
-import {
-  fetchAddress,
-  fetchDescription,
-  formatDefaultUsername,
-  USERNAME_DOMAINS,
-} from 'apps/web/src/utils/usernames';
-import { redirect } from 'next/navigation';
-import classNames from 'classnames';
 import { BaseName } from '@coinbase/onchainkit/identity';
+import ProfileProviders from 'apps/web/app/(basenames)/name/[username]/ProfileProviders';
+import ErrorsProvider from 'apps/web/contexts/Errors';
+import DynamicProfilePromo from 'apps/web/src/components/Basenames/ProfilePromo/dynamic';
 import UsernameProfile from 'apps/web/src/components/Basenames/UsernameProfile';
+import { redirectIfNotNameOwner } from 'apps/web/src/utils/redirectIfNotNameOwner';
+import {
+  formatDefaultUsername,
+  getBasenameTextRecord,
+  UsernameTextRecordKeys,
+} from 'apps/web/src/utils/usernames';
+import classNames from 'classnames';
+import { Metadata } from 'next';
 
-type UsernameProfileProps = {
+export type UsernameProfileProps = {
   params: { username: BaseName };
 };
 
 export async function generateMetadata({ params }: UsernameProfileProps): Promise<Metadata> {
   const username = await formatDefaultUsername(params.username);
   const defaultDescription = `${username}, a Basename`;
-  const description = await fetchDescription(username);
+  const description = await getBasenameTextRecord(username, UsernameTextRecordKeys.Description);
 
   return {
     metadataBase: new URL('https://base.org'),
-    title: `Basenames | ${params.username}`,
+    title: `Basenames | ${username}`,
     description: description ?? defaultDescription,
     openGraph: {
-      title: `Basenames | ${params.username}`,
-      url: `/${username}`,
-      images: [`/${params.username}/assets/coverImage.png`],
+      title: `Basenames | ${username}`,
+      url: `/name/${params.username}`,
+    },
+    twitter: {
+      card: 'summary_large_image',
     },
   };
 }
 
 export default async function Username({ params }: UsernameProfileProps) {
-  let username = params.username;
-
-  // redirect /[name].base.eth to /name
-  if (username.endsWith(`.${USERNAME_DOMAINS[base.id]}`)) {
-    return redirect(username.replace(`.${USERNAME_DOMAINS[base.id]}`, ''));
-  }
-
-  username = await formatDefaultUsername(params.username);
+  let username = await formatDefaultUsername(decodeURIComponent(params.username) as BaseName);
+  await redirectIfNotNameOwner(username);
 
   const usernameProfilePageClasses = classNames(
     'mx-auto mt-32 flex min-h-screen w-full max-w-[1440px] flex-col justify-between gap-10 px-4 px-4 pb-40 md:flex-row md:px-8',
   );
 
-  const ensAddress = await fetchAddress(username);
-
-  // Domain doesn't exist
-  if (!ensAddress) {
-    redirect(`/name/not-found?name=${username}`);
-  }
-
   return (
-    <ProfileProviders username={username} address={ensAddress}>
-      <main className={usernameProfilePageClasses}>
-        <UsernameProfile />
-      </main>
-    </ProfileProviders>
+    <ErrorsProvider context="profile">
+      <ProfileProviders username={username}>
+        <main className={usernameProfilePageClasses}>
+          <UsernameProfile />
+          <DynamicProfilePromo />
+        </main>
+      </ProfileProviders>
+    </ErrorsProvider>
   );
 }

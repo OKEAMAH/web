@@ -1,8 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-
-type Props = {
-  setSearchText: (val: string) => void;
-};
+'use client';
+import { Dispatch, SetStateAction, useCallback, useRef } from 'react';
 
 function SearchIcon() {
   return (
@@ -40,30 +37,28 @@ function XIcon() {
   );
 }
 
-const DEBOUNCE_LENGTH_MS = 300;
-
-export function SearchBar({ setSearchText }: Props) {
-  const [text, setText] = useState('');
+export function SearchBar({
+  search,
+  setSearch,
+}: {
+  search: string;
+  setSearch: Dispatch<SetStateAction<string>>;
+}) {
   const debounced = useRef<number>();
 
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       clearTimeout(debounced.current);
 
-      const val = e.target.value;
-      setText(val);
-
-      debounced.current = window.setTimeout(() => {
-        setSearchText(val);
-      }, DEBOUNCE_LENGTH_MS);
+      const value = e.target.value;
+      setSearch(value);
     },
-    [setText, setSearchText],
+    [setSearch],
   );
 
   const clearInput = useCallback(() => {
-    setText('');
-    setSearchText('');
-  }, [setSearchText]);
+    setSearch('');
+  }, [setSearch]);
 
   return (
     <div className="flex h-10 flex-row items-center gap-2 rounded-[56px] border border-gray-60 p-2 md:w-full lg:w-80">
@@ -72,13 +67,13 @@ export function SearchBar({ setSearchText }: Props) {
       <input
         type="text"
         id="appsSearchBar"
-        value={text}
+        value={search}
         onChange={onChange}
         className="w-full bg-black font-sans text-base text-white placeholder:text-gray-muted focus:outline-none"
         placeholder="Search"
         aria-label="Search for apps and integrations in the Base ecosystem"
       />
-      {text && (
+      {search && (
         <button type="button" onClick={clearInput} aria-label="clear input">
           <XIcon />
         </button>

@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 const defaultTheme = require('tailwindcss/defaultTheme');
+import path from 'node:path';
 
 module.exports = {
   content: [
@@ -9,6 +10,7 @@ module.exports = {
 
     // Or if using `src` directory:
     './src/**/*.{js,ts,jsx,tsx}',
+    path.join(path.dirname(require.resolve('@coinbase/onchainkit')), '**/*.js'),
   ],
   theme: {
     // https://www.figma.com/design/AH4N0fma2EvI30IltjBGPy/%E2%9C%A8-CDS-Styles-(Variables)?node-id=46-168
@@ -20,6 +22,7 @@ module.exports = {
       ocsyellow: '#FEE002',
       illoblack: '#0A0B0D',
       transparent: 'transparent',
+      currentColor: 'currentColor',
       blue: {
         0: '#F5F8FF',
         5: '#D3E1FF',
@@ -37,6 +40,7 @@ module.exports = {
         400: '#688CEC',
         500: '#0455FF',
         600: '#0052FF',
+        DEFAULT: '#0052FF',
       },
       gray: {
         0: '#FFFFFF',
@@ -521,7 +525,18 @@ module.exports = {
           '0px 8px 24px 0px rgba(255, 255, 255, 0.5) inset, 0px -8px 24px 0px rgba(0, 0, 0, 0.25) inset, 0px -2px 4px 0px rgba(255, 255, 255, 0.25) inset, 0px 2px 10px 0px rgba(88, 89, 91, 1) inset, 0px 4px 10px 0px rgba(0, 82, 255, 0.32), 0px 4px 24px 0px rgba(155, 216, 217, 0.5) inset, 0px 8px 10px 0px rgba(255, 255, 255, 0.25) inset;',
         'pill-glow': '0px 0px 5px 0px #0052FF;',
       },
+
       keyframes: {
+        'slide-left': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+
+        progress: {
+          '0%': { width: '0%' },
+          '100%': { width: '100%' },
+        },
+
         wiggle: {
           '0%, 100%': { transform: 'rotate(-2deg)' },
           '50%': { transform: 'rotate(2deg)' },
@@ -535,12 +550,49 @@ module.exports = {
           '50%': { transform: 'translateX(0) rotate(6deg)' },
           '100%': { transform: 'translateX(0) rotate(6deg)' },
         },
+        longslide: {
+          '0%': { transform: 'translateX(-23rem)' },
+          '100%': { transform: 'translateX(13rem)' },
+        },
+        verticalSlide: {
+          '0%': { transform: 'translateY(-80%)', opacity: 0 },
+          '30%': { transform: 'translateY(-5%)', opacity: 1 },
+          '70%': { transform: 'translateY(5%)', opacity: 1 },
+          '100%': { transform: 'translateY(80%)', opacity: 0 },
+        },
+        pulsate: {
+          '0%': { transform: 'scale(95%)' },
+          '30%': { transform: 'scale(100%)' },
+          '70%': { transform: 'scale(100%)' },
+          '100%': { transform: 'scale(95%)' },
+        },
       },
       animation: {
+        'slide-left': 'slide-left var(--animation-duration, 20s) linear infinite',
+        progress: 'progress 5s linear',
         wiggle: 'wiggle 3s linear infinite',
         bounce: 'bounce 1s ease-in-out infinite',
-        slide: 'slide 1s linear infinite',
+        slide: 'slide 1s ease-in-out infinite',
+        longslide: 'longslide 2s linear infinite',
+        verticalSlide: 'verticalSlide 2s linear infinite',
+        pulsate: 'pulsate 2s linear infinite',
       },
+      zIndex: {
+        1: '1',
+        2: '2',
+        3: '3',
+        4: '4',
+        5: '5',
+        6: '6',
+        7: '7',
+        8: '8',
+        9: '9',
+      },
+    },
+  },
+  variants: {
+    extend: {
+      animation: ['group-hover'],
     },
   },
   plugins: [],
