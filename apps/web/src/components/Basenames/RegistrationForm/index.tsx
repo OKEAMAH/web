@@ -6,26 +6,31 @@ import {
 } from '@heroicons/react/16/solid';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAnalytics } from 'apps/web/contexts/Analytics';
+import { useErrors } from 'apps/web/contexts/Errors';
+import RegistrarControllerABI from 'apps/web/src/abis/RegistrarControllerABI';
+import { USERNAME_REGISTRAR_CONTROLLER_ADDRESSES } from 'apps/web/src/addresses/usernames';
+import { PremiumExplainerModal } from 'apps/web/src/components/Basenames/PremiumExplainerModal';
 import { useRegistration } from 'apps/web/src/components/Basenames/RegistrationContext';
 import RegistrationLearnMoreModal from 'apps/web/src/components/Basenames/RegistrationLearnMoreModal';
 import { Button, ButtonSizes, ButtonVariants } from 'apps/web/src/components/Button/Button';
 import { Icon } from 'apps/web/src/components/Icon/Icon';
+import Label from 'apps/web/src/components/Label';
+import Tooltip from 'apps/web/src/components/Tooltip';
 import TransactionError from 'apps/web/src/components/TransactionError';
-import TransactionStatus from 'apps/web/src/components/TransactionStatus';
-import useBasenameChain from 'apps/web/src/hooks/useBasenameChain';
+import { usePremiumEndDurationRemaining } from 'apps/web/src/hooks/useActiveEthPremiumAmount';
+import useBasenameChain, { supportedChainIds } from 'apps/web/src/hooks/useBasenameChain';
 import { useEthPriceFromUniswap } from 'apps/web/src/hooks/useEthPriceFromUniswap';
 import {
   useDiscountedNameRegistrationPrice,
   useNameRegistrationPrice,
 } from 'apps/web/src/hooks/useNameRegistrationPrice';
-import { useRegisterNameCallback } from 'apps/web/src/hooks/useRegisterNameCallback';
+import { useRentPrice } from 'apps/web/src/hooks/useRentPrice';
+import { formatBaseEthDomain, IS_EARLY_ACCESS } from 'apps/web/src/utils/usernames';
 import classNames from 'classnames';
 import { ActionType } from 'libs/base-ui/utils/logEvent';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { formatEther } from 'viem';
-import { useAccount, useBalance, useChains, useSwitchChain } from 'wagmi';
-
-const isEarlyAccess = process.env.NEXT_PUBLIC_USERNAMES_EARLY_ACCESS == 'true';
+import { ChangeEvent, useCallback, useMemo, useState } from 'react';
+import { formatEther, zeroAddress } from 'viem';
+import { useAccount, useBalance, useReadContract, useSwitchChain } from 'wagmi';
 
 function formatEtherPrice(price?: bigint) {
   if (price === undefined) {
@@ -48,107 +53,138 @@ function formatUsdPrice(price: bigint, ethUsdPrice: number) {
 
 export default function RegistrationForm() {
   const { isConnected, chain: connectedChain, address } = useAccount();
-  const chains = useChains();
+
   const { openConnectModal } = useConnectModal();
   const { logEventWithContext } = useAnalytics();
+  const { logError } = useErrors();
   const { basenameChain } = useBasenameChain();
   const { switchChain } = useSwitchChain();
+
   const switchToIntendedNetwork = useCallback(
     () => switchChain({ chainId: basenameChain.id }),
     [basenameChain.id, switchChain],
   );
   const isOnSupportedNetwork = useMemo(
-    () => connectedChain && chains.includes(connectedChain),
-    [connectedChain, chains],
+    () => connectedChain && supportedChainIds.includes(connectedChain.id),
+    [connectedChain],
   );
 
   const {
-    transactionData,
-    transactionError,
     selectedName,
-    setRegisterNameTransactionHash,
-    setRegisterNameCallsBatchId,
     discount,
-    loadingDiscounts,
+    years,
+    setYears,
+    reverseRecord,
+    setReverseRecord,
+    hasExistingBasename,
+    registerName,
+    registerNameError,
+    registerNameIsPending,
+    code,
   } = useRegistration();
-  const [years, setYears] = useState(1);
 
-  const [learnMoreModalOpen, setLearnMoreModalOpen] = useState(false);
+  const [premiumExplainerModalOpen, setPremiumExplainerModalOpen] = useState(false);
+  const togglePremiumExplainerModal = useCallback(() => {
+    logEventWithContext('toggle_premium_explainer_modal', ActionType.change);
+    setPremiumExplainerModalOpen((open) => !open);
+  }, [logEventWithContext, setPremiumExplainerModalOpen]);
 
+  const [learnMoreAboutDiscountsModalOpen, setLearnMoreAboutDiscountsModalOpen] = useState(false);
   const toggleLearnMoreModal = useCallback(() => {
-    logEventWithContext('open_learn_more_modal', ActionType.change);
-    setLearnMoreModalOpen((open) => !open);
-  }, [logEventWithContext]);
+    logEventWithContext('toggle_learn_more_modal', ActionType.change);
+    setLearnMoreAboutDiscountsModalOpen((open) => !open);
+  }, [logEventWithContext, setLearnMoreAboutDiscountsModalOpen]);
 
   const increment = useCallback(() => {
     logEventWithContext('registration_form_increment_year', ActionType.click);
 
     setYears((n) => n + 1);
-  }, [logEventWithContext]);
+  }, [logEventWithContext, setYears]);
 
   const decrement = useCallback(() => {
     logEventWithContext('registration_form_decement_year', ActionType.click);
 
     setYears((n) => (n > 1 ? n - 1 : n));
-  }, [logEventWithContext]);
+  }, [logEventWithContext, setYears]);
 
   const ethUsdPrice = useEthPriceFromUniswap();
   const { data: initialPrice } = useNameRegistrationPrice(selectedName, years);
+  const { data: singleYearEthCost } = useNameRegistrationPrice(selectedName, 1);
+  const { basePrice: singleYearBasePrice, premiumPrice } = useRentPrice(selectedName, 1);
+  const premiumValue = Number(formatEther(premiumPrice ?? 0));
+  const formattedPremiumCost =
+    premiumValue < 0.001
+      ? '<0.001'
+      : premiumValue.toLocaleString(undefined, {
+          maximumFractionDigits: 3,
+        });
   const { data: discountedPrice } = useDiscountedNameRegistrationPrice(
     selectedName,
     years,
     discount?.discountKey,
   );
 
-  const price = discountedPrice ?? initialPrice;
+  const { data: hasRegisteredWithDiscount } = useReadContract({
+    abi: RegistrarControllerABI,
+    address: USERNAME_REGISTRAR_CONTROLLER_ADDRESSES[basenameChain.id],
+    functionName: 'discountedRegistrants',
+    args: [address ?? zeroAddress],
+  });
 
-  const {
-    callback: registerName,
-    data: registerNameTransactionHash,
-    callBatchId,
-    isPending: registerNameTransactionIsPending,
-    error: registerNameError,
-  } = useRegisterNameCallback(
-    selectedName,
-    price,
-    years,
-    discount?.discountKey,
-    discount?.validationData,
-  );
-
-  useEffect(() => {
-    if (registerNameTransactionHash ?? callBatchId) {
-      logEventWithContext('register_name_transaction_approved', ActionType.change);
-    }
-    if (callBatchId) setRegisterNameCallsBatchId(callBatchId);
-    if (registerNameTransactionHash) setRegisterNameTransactionHash(registerNameTransactionHash);
-  }, [
-    callBatchId,
-    logEventWithContext,
-    registerNameTransactionHash,
-    setRegisterNameCallsBatchId,
-    setRegisterNameTransactionHash,
-  ]);
+  const price = hasRegisteredWithDiscount ? initialPrice : discountedPrice ?? initialPrice;
 
   const registerNameCallback = useCallback(() => {
-    registerName()
-      .then(() => {})
-      .catch(() => {});
-  }, [registerName]);
+    registerName().catch((error) => {
+      logError(error, 'Failed to register name');
+    });
+  }, [logError, registerName]);
+
+  const onChangeReverseRecord = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setReverseRecord(event.target.checked),
+    [setReverseRecord],
+  );
 
   const { data: balance } = useBalance({ address, chainId: connectedChain?.id });
   const insufficientBalanceToRegister =
     balance?.value !== undefined && price !== undefined && balance?.value < price;
-  const usdPrice =
-    price !== undefined && ethUsdPrice !== undefined ? formatUsdPrice(price, ethUsdPrice) : '--.--';
-  const nameIsFree = price === 0n;
+  const correctChain = connectedChain?.id === basenameChain.id;
+  const insufficientBalanceToRegisterAndCorrectChain =
+    insufficientBalanceToRegister && correctChain;
 
-  if (!isEarlyAccess || (isEarlyAccess && discount)) {
+  const hasResolvedUSDPrice = price !== undefined && ethUsdPrice !== undefined;
+  const usdPrice = hasResolvedUSDPrice ? formatUsdPrice(price, ethUsdPrice) : '--.--';
+  const nameIsFree = !hasRegisteredWithDiscount && price === 0n;
+
+  const { seconds, timestamp: premiumEndTimestamp } = usePremiumEndDurationRemaining();
+
+  const isPremiumActive = premiumPrice && premiumPrice !== 0n && seconds !== 0n;
+  const mainRegistrationElementClasses = classNames(
+    'z-10 flex flex-col items-start justify-between gap-6 bg-[#F7F7F7] p-8 text-gray-60 shadow-xl md:flex-row md:items-center relative z-20',
+    {
+      'rounded-2xl': !isPremiumActive,
+      'rounded-b-2xl': isPremiumActive,
+    },
+  );
+
+  if (!IS_EARLY_ACCESS || (IS_EARLY_ACCESS && discount)) {
     return (
       <>
         <div className="mt-20 transition-all duration-500">
-          <div className="z-10 flex flex-col justify-between gap-4 rounded-2xl bg-[#F7F7F7] p-8 text-gray-60 shadow-xl md:flex-row">
-            <div>
+          {isPremiumActive && (
+            <div className="flex justify-between gap-4 rounded-t-2xl bg-gradient-to-r from-[#B139FF] to-[#FF9533] px-6 py-4 text-white">
+              <p>
+                Temporary premium of {formattedPremiumCost} ETH{' '}
+                {premiumEndTimestamp && <>ends in {premiumEndTimestamp}</>}
+              </p>
+              {Boolean(premiumPrice && singleYearEthCost) && (
+                <button type="button" className="underline" onClick={togglePremiumExplainerModal}>
+                  Learn more
+                </button>
+              )}
+            </div>
+          )}
+          <div className={mainRegistrationElementClasses}>
+            <div className="max-w-[14rem] self-start">
               <p className="text-line mb-2 text-sm font-bold uppercase">Claim for</p>
               <div className="flex items-center justify-between">
                 <button
@@ -160,7 +196,7 @@ export default function RegistrationForm() {
                 >
                   <MinusIcon width="14" height="14" className="fill-[#32353D]" />
                 </button>
-                <span className="flex w-32 items-center justify-center text-3xl text-black">
+                <span className="flex w-32 items-center justify-center text-3xl font-bold text-black">
                   {years} year{years > 1 && 's'}
                 </span>
                 <button
@@ -172,12 +208,43 @@ export default function RegistrationForm() {
                   <PlusIcon width="14" height="14" className="fill-[#32353D]" />
                 </button>
               </div>
+              {hasExistingBasename && (
+                <Label
+                  className="mt-4 flex w-full items-center justify-center gap-2 text-center"
+                  htmlFor="reverseRecord"
+                >
+                  <input
+                    type="checkbox"
+                    checked={reverseRecord}
+                    onChange={onChangeReverseRecord}
+                    id="reverseRecord"
+                  />
+                  <span className="flex flex-row items-center gap-2 text-sm">
+                    Set as Primary Name
+                    <Tooltip
+                      content={
+                        <>
+                          This will cause apps that support basenames to resolve{' '}
+                          <strong>{formatBaseEthDomain(selectedName, basenameChain.id)}</strong>{' '}
+                          when looking up your address.
+                        </>
+                      }
+                    >
+                      <Icon name="info" color="currentColor" width="0.8rem" height="0.8rem" />
+                    </Tooltip>
+                  </span>
+                </Label>
+              )}
             </div>
-            <div className="min-w-[14rem] text-left">
+            <div className="min-w-[14rem] self-start text-left">
               <p className="text-line mb-2 text-sm font-bold uppercase">Amount</p>
-              <div className="flex items-baseline justify-start gap-4">
-                {discountedPrice !== undefined ? (
-                  <div className=" flex flex-row items-baseline justify-around gap-2">
+              <div className="flex min-w-60 items-baseline justify-start gap-4">
+                {price === undefined ? (
+                  <div className="flex h-9 items-center justify-center self-center">
+                    <Icon name="spinner" color="currentColor" />
+                  </div>
+                ) : discountedPrice !== undefined && !hasRegisteredWithDiscount ? (
+                  <div className="flex flex-row items-baseline justify-around gap-2">
                     <p
                       className={classNames('whitespace-nowrap text-3xl text-black line-through', {
                         'text-state-n-hovered': insufficientBalanceToRegister,
@@ -186,7 +253,7 @@ export default function RegistrationForm() {
                       {formatEtherPrice(initialPrice)}
                     </p>
                     <p
-                      className={classNames('whitespace-nowrap text-3xl text-green-50', {
+                      className={classNames('whitespace-nowrap text-3xl font-bold text-green-50', {
                         'text-state-n-hovered': insufficientBalanceToRegister,
                       })}
                     >
@@ -195,109 +262,129 @@ export default function RegistrationForm() {
                   </div>
                 ) : (
                   <p
-                    className={classNames('whitespace-nowrap text-3xl text-black', {
+                    className={classNames('whitespace-nowrap text-3xl font-bold text-black', {
                       'text-state-n-hovered': insufficientBalanceToRegister,
                     })}
                   >
                     {formatEtherPrice(price)} ETH
                   </p>
                 )}
-                {loadingDiscounts ? (
-                  <div className="flex h-4 items-center justify-center">
-                    <Icon name="spinner" color="currentColor" />
-                  </div>
-                ) : (
+                {hasResolvedUSDPrice && (
                   <span className="whitespace-nowrap text-xl text-gray-60">${usdPrice}</span>
                 )}
               </div>
               {insufficientBalanceToRegister ? (
                 <p className="text-sm text-state-n-hovered">your ETH balance is insufficient</p>
-              ) : Boolean(nameIsFree && isEarlyAccess) ? (
+              ) : Boolean(nameIsFree && IS_EARLY_ACCESS) ? (
                 <p className="text-sm text-green-50">Discounted during Early Access.</p>
-              ) : (
-                nameIsFree && <p className="text-sm text-green-50">Free with your verification</p>
-              )}
+              ) : nameIsFree ? (
+                <p className="text-sm text-green-50">Free with your discount</p>
+              ) : isPremiumActive ? (
+                <button
+                  className="text-sm text-blue-40 underline"
+                  type="button"
+                  onClick={togglePremiumExplainerModal}
+                >
+                  This name has a temporary premium
+                </button>
+              ) : null}
             </div>
 
-            <ConnectButton.Custom>
-              {({ account, chain, mounted }) => {
-                const ready = mounted;
-                const connected = ready && account && chain;
+            <div className="w-full max-w-full md:max-w-[13rem]">
+              <ConnectButton.Custom>
+                {({ account, chain, mounted }) => {
+                  const ready = mounted;
+                  const connected = ready && account && chain;
 
-                if (!connected) {
+                  if (!connected) {
+                    return (
+                      <Button
+                        type="button"
+                        variant={ButtonVariants.Black}
+                        size={ButtonSizes.Medium}
+                        onClick={openConnectModal}
+                        rounded
+                      >
+                        Connect wallet
+                      </Button>
+                    );
+                  }
+
                   return (
                     <Button
+                      onClick={correctChain ? registerNameCallback : switchToIntendedNetwork}
                       type="button"
                       variant={ButtonVariants.Black}
-                      size={ButtonSizes.Small}
-                      onClick={openConnectModal}
+                      size={ButtonSizes.Medium}
+                      disabled={
+                        insufficientBalanceToRegisterAndCorrectChain || registerNameIsPending
+                      }
+                      isLoading={registerNameIsPending}
                       rounded
+                      fullWidth
                     >
-                      Connect wallet
+                      {correctChain ? 'Register name' : 'Switch to Base'}
                     </Button>
                   );
-                }
-
-                return (
-                  <Button
-                    onClick={registerNameCallback}
-                    type="button"
-                    variant={ButtonVariants.Black}
-                    size={ButtonSizes.Small}
-                    disabled={insufficientBalanceToRegister || registerNameTransactionIsPending}
-                    isLoading={registerNameTransactionIsPending}
-                    rounded
-                  >
-                    Register name
-                  </Button>
-                );
-              }}
-            </ConnectButton.Custom>
+                }}
+              </ConnectButton.Custom>
+            </div>
           </div>
-
-          {transactionError !== null && (
-            <TransactionError className="mt-4 text-center" error={transactionError} />
+          {code && (
+            <div className="relative z-10 -mt-8 rounded-xl bg-gradient-to-r from-indigo-40 to-orange-30 px-4 py-4 pt-12 text-center text-lg text-white">
+              Claim your <strong>free creator basename</strong> &mdash; See you this{' '}
+              <strong>friday for dinner</strong>
+            </div>
           )}
+
           {registerNameError && (
             <TransactionError className="mt-4 text-center" error={registerNameError} />
           )}
-          {transactionData && transactionData.status === 'reverted' && (
-            <TransactionStatus
-              className="mt-4 text-center"
-              transaction={transactionData}
-              chainId={basenameChain.id}
-            />
-          )}
-          {!isEarlyAccess && (
-            <div className="mt-6 flex w-full justify-center">
-              <p className="text mr-2 text-center font-bold uppercase text-[#5B616E]">
-                {nameIsFree
-                  ? "You've qualified for a free name! "
-                  : 'Unlock your username for free! '}
+
+          {!IS_EARLY_ACCESS && (
+            <div className="mt-6 w-full ">
+              <p className="text mr-2 text-center font-bold uppercase ">
+                <span className="text-[#5B616E]">
+                  {nameIsFree
+                    ? "You've qualified for a free name! "
+                    : 'Unlock your username for free! '}
+                </span>
+
+                <button
+                  type="button"
+                  className="text-line font-bold uppercase text-[] underline"
+                  onClick={toggleLearnMoreModal}
+                >
+                  Learn more
+                </button>
               </p>
-              <button
-                type="button"
-                className="text-line font-bold uppercase underline"
-                onClick={toggleLearnMoreModal}
-              >
-                Learn more
-              </button>
             </div>
           )}
         </div>
         <RegistrationLearnMoreModal
-          isOpen={learnMoreModalOpen}
+          isOpen={learnMoreAboutDiscountsModalOpen}
           toggleModal={toggleLearnMoreModal}
         />
+        {Boolean(premiumPrice && singleYearEthCost) && (
+          <PremiumExplainerModal
+            premiumEthAmount={premiumPrice}
+            baseSingleYearEthCost={singleYearBasePrice}
+            isOpen={premiumExplainerModalOpen}
+            toggleModal={togglePremiumExplainerModal}
+            nameLength={selectedName?.length}
+          />
+        )}
       </>
     );
   }
   if (isConnected) {
     if (isOnSupportedNetwork) {
       return (
-        <div className="z-10 mt-8 flex flex-row items-center justify-center ">
-          <ExclamationCircleIcon width={12} height={12} className="fill-state-n-hovered" />
-          <p className="ml-2 text-state-n-hovered">
+        <div className="z-10 mt-8 flex flex-row items-center justify-center text-gray-40">
+          <p className="ml-2 text-center">
+            <span className="mr-2 inline-block">
+              <Icon name="info" width={12} height={12} color="currentColor" />
+            </span>
             The connected wallet is not eligible for early access.
           </p>
         </div>
@@ -318,7 +405,7 @@ export default function RegistrationForm() {
 
   return (
     <div className="z-10 mx-auto mt-8 flex flex-row items-center justify-center">
-      <InformationCircleIcon width={12} height={12} className="fill-gray-40" />
+      <InformationCircleIcon width={12} height={12} className="hidden fill-gray-40 sm:block" />
       <p className="ml-2 text-gray-40">Connect a wallet to register a name</p>
     </div>
   );

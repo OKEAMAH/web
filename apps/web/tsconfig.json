@@ -18,9 +18,11 @@
         "name": "next"
       }
     ],
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "types": ["jest", "@testing-library/jest-dom"]
   },
   "include": [
+    "global.d.ts",
     "next-env.d.ts",
     "**/*",
     "**/*.json",

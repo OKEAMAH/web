@@ -14,25 +14,11 @@ import { useDebounceValue } from 'usehooks-ts';
 import Tooltip from 'apps/web/src/components/Tooltip';
 import { InformationCircleIcon } from '@heroicons/react/16/solid';
 import useBasenameChain from 'apps/web/src/hooks/useBasenameChain';
-import { Chain } from 'viem';
-
-export enum RegistrationSearchInputVariant {
-  Small,
-  Large,
-}
-
-type RegistrationSearchInputProps = {
-  variant: RegistrationSearchInputVariant;
-  placeholder: string;
-};
-
-type SuggestionEntryProps = {
-  suggestion: string;
-  buttonClasses: string;
-  handleSelectName: (name: string) => void;
-  basenameChain: Chain;
-  iconSize: number;
-};
+import {
+  SuggestionEntryProps,
+  RegistrationSearchInputProps,
+  RegistrationSearchInputVariant,
+} from './types';
 
 function SuggestionEntry({
   suggestion,
@@ -61,8 +47,10 @@ export default function RegistrationSearchInput({
   const { logEventWithContext } = useAnalytics();
   const [search, setSearch] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [headerBackground, setHeaderBackground] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
   const [debouncedSearch] = useDebounceValue(search, 400);
+  const [debouncedScroll] = useDebounceValue(headerBackground, 200);
   const { basenameChain } = useBasenameChain();
   const {
     isLoading: isLoadingNameAvailability,
@@ -79,12 +67,13 @@ export default function RegistrationSearchInput({
 
   const { valid, message } = validateEnsDomainName(debouncedSearch);
   const invalidWithMessage = !valid && !!message;
+  const resetBackground = focused && debouncedScroll;
 
   const { setSearchInputFocused, setSearchInputHovered, setSelectedName } = useRegistration();
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = event.target;
-    setSearch(value.replace(/\s/g, ''));
+    setSearch(value.replace(/[\s\.]+/g, ''));
   }, []);
 
   useEffect(() => {
@@ -92,7 +81,7 @@ export default function RegistrationSearchInput({
   }, [debouncedSearch, invalidWithMessage, valid]);
 
   const RegistrationSearchInputClasses = classNames(
-    'relative z-10 transition-all duration-500 w-full mx-auto group text-black',
+    'relative z-9 transition-all duration-500 w-full mx-auto group text-black',
   );
 
   // This will change/animate the border when hovering the whole component
@@ -109,7 +98,8 @@ export default function RegistrationSearchInput({
     'w-full outline-0 placeholder:uppercase peer ',
     // Padding & Font sizes
     {
-      'py-7 pl-6 pr-16 text-2xl': variant === RegistrationSearchInputVariant.Large,
+      'py-5 md:py-7 pl-6 pr-16 text-md md:text-2xl':
+        variant === RegistrationSearchInputVariant.Large,
       'py-2 pl-3 pr-6': variant === RegistrationSearchInputVariant.Small,
     },
     // Background
@@ -134,7 +124,7 @@ export default function RegistrationSearchInput({
 
   const dropdownClasses = classNames(
     'flex flex-col items-start bg-white text-black',
-    'absolute left-0 right-0 top-full z-10 border-t-0 ',
+    'absolute left-0 right-0 top-full z-9 border-t-0 ',
     groupBorderClasses,
     // radius, Padding & Font sizes
     {
@@ -176,10 +166,13 @@ export default function RegistrationSearchInput({
     },
   );
 
-  const inputIconClasses = classNames('absolute top-1/2 z-20 flex -translate-y-1/2 items-center', {
-    'right-8': variant === RegistrationSearchInputVariant.Large,
-    'right-3': variant === RegistrationSearchInputVariant.Small,
-  });
+  const inputIconClasses = classNames(
+    'absolute top-1/2 z-9 flex -translate-y-1/2 items-center scale-75 md:scale-100',
+    {
+      'right-8': variant === RegistrationSearchInputVariant.Large,
+      'right-3': variant === RegistrationSearchInputVariant.Small,
+    },
+  );
 
   const lineClasses = classNames('w-full', {
     'px-6': variant === RegistrationSearchInputVariant.Large,
@@ -234,15 +227,31 @@ export default function RegistrationSearchInput({
   );
 
   useEffect(() => {
-    setSearchInputFocused(focused);
-  }, [focused, setSearchInputFocused]);
+    const handleScroll = () => {
+      setHeaderBackground(window.scrollY <= 250);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   useEffect(() => {
-    if (!invalidWithMessage) return;
+    setSearchInputFocused(resetBackground);
+  }, [resetBackground, setSearchInputFocused]);
 
-    // Log invalid
-    logEventWithContext('search_available_name_invalid', ActionType.error, { error: message });
-  }, [invalidWithMessage, logEventWithContext, message, setSearchInputFocused]);
+  useEffect(() => {
+    if (debouncedSearch.length > 2 && invalidWithMessage) {
+      // Log invalid
+      logEventWithContext('search_available_name_invalid', ActionType.error, { error: message });
+    }
+  }, [
+    debouncedSearch.length,
+    invalidWithMessage,
+    logEventWithContext,
+    message,
+    setSearchInputFocused,
+  ]);
 
   const selectName = useCallback(() => {
     handleSelectName(debouncedSearch);
@@ -263,16 +272,17 @@ export default function RegistrationSearchInput({
         className={inputClasses}
         id={inputId}
         ref={inputRef}
+        autoCapitalize="none"
       />
       <div className={dropdownClasses}>
         <div className={lineClasses}>
-          <div className="w-full border-t border-gray-40/20 " />
+          <div className="w-full border-t border-gray-40/20" />
         </div>
         {invalidWithMessage ? (
           <p className={mutedMessage}>{message}</p>
         ) : isNameAvailable === true ? (
           <>
-            <p className={dropdownLabelClasses}>Available</p>
+            <p className={`${dropdownLabelClasses} hidden md:block`}>Available</p>
             <button className={buttonClasses} type="button" onClick={selectName}>
               <span className="truncate">
                 {formatBaseEthDomain(debouncedSearch, basenameChain.id)}
@@ -295,7 +305,7 @@ export default function RegistrationSearchInput({
         ) : (
           <>
             <p className={mutedMessage}>
-              {formatBaseEthDomain(debouncedSearch, basenameChain.id)} is not available
+              {formatBaseEthDomain(debouncedSearch, basenameChain.id)} is already registered
             </p>
             {suggestions.length > 0 ? (
               <>
@@ -305,7 +315,7 @@ export default function RegistrationSearchInput({
                     <InformationCircleIcon
                       width={12}
                       height={12}
-                      className="fill-gray-40 transition-colors hover:fill-gray-dark"
+                      className="hidden fill-gray-40 transition-colors hover:fill-gray-dark sm:block"
                     />
                   </div>
                 </Tooltip>

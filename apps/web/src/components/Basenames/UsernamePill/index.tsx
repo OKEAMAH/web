@@ -1,36 +1,23 @@
-import { BaseName } from '@coinbase/onchainkit/identity';
+'use client';
 import Dropdown from 'apps/web/src/components/Dropdown';
 import DropdownItem from 'apps/web/src/components/DropdownItem';
 import DropdownMenu from 'apps/web/src/components/DropdownMenu';
 import DropdownToggle from 'apps/web/src/components/DropdownToggle';
 import { Icon } from 'apps/web/src/components/Icon/Icon';
-import ImageWithLoading from 'apps/web/src/components/ImageWithLoading';
-import useReadBaseEnsTextRecords from 'apps/web/src/hooks/useReadBaseEnsTextRecords';
-import { getUserNamePicture } from 'apps/web/src/utils/usernames';
 import classNames from 'classnames';
-import { Address } from 'viem';
+import { UsernamePillProps, UsernamePillVariants } from './types';
+import BasenameAvatar from 'apps/web/src/components/Basenames/BasenameAvatar';
 
-export enum UsernamePillVariants {
-  Inline = 'inline',
-  Card = 'card',
-}
-
-type UsernamePillProps = {
-  variant: UsernamePillVariants;
-  username: BaseName;
-  address?: Address;
-};
-
-export function UsernamePill({ variant, username, address }: UsernamePillProps) {
+export function UsernamePill({ variant, username, address, isRegistering }: UsernamePillProps) {
   const transitionClasses = 'transition-all duration-700 ease-in-out';
 
   const pillNameClasses = classNames(
-    'bg-blue-500 text-white relative leading-[2em] overflow-hidden text-ellipsis max-w-full',
+    'bg-blue-500 w-fit-content mx-auto text-white relative leading-[2em] overflow-hidden text-ellipsis max-w-full',
     'shadow-[0px_8px_16px_0px_rgba(0,82,255,0.32),inset_0px_8px_16px_0px_rgba(255,255,255,0.25)]',
     transitionClasses,
     {
       // Note: If you change this py-5, it won't match the dropdown's height
-      'rounded-[5rem] py-5 px-8 w-fit': variant === UsernamePillVariants.Inline,
+      'rounded-[5rem] py-4 md:py-6 px-8 w-fit': variant === UsernamePillVariants.Inline,
       'rounded-[2rem] py-8 px-10 pt-40 w-full': variant === UsernamePillVariants.Card,
     },
   );
@@ -40,41 +27,41 @@ export function UsernamePill({ variant, username, address }: UsernamePillProps) 
     'absolute',
     transitionClasses,
     {
-      'h-[4rem] max-h-[4rem] min-h-[4rem] w-[4rem] min-w-[4rem] max-w-[4rem] top-4 left-4':
+      'h-[2.5rem] w-[2.5rem] md:h-[4rem] md:w-[4rem] top-3 md:top-4 left-4':
         variant === UsernamePillVariants.Inline,
-      'h-[3rem] max-h-[3rem] min-h-[3rem] w-[3rem] min-w-[3rem] max-w-[3rem] top-10 left-10':
-        variant === UsernamePillVariants.Card,
+      'h-[3rem] w-[3rem] top-10 left-10': variant === UsernamePillVariants.Card,
     },
   );
+
+  const nameLength = username.length;
+
+  const nameLengthPillFontSize = classNames({
+    'text-[clamp(0.8rem,5vw,3rem)]': nameLength > 25,
+    'text-[clamp(1rem,5vw,3rem)]': nameLength > 20 && nameLength <= 25,
+    'text-[clamp(1.5rem,5vw,3rem)]': nameLength > 15 && nameLength <= 20,
+    'text-[clamp(2rem,5vw,3rem)]': nameLength > 0 && nameLength <= 15,
+  });
 
   const userNameClasses = classNames(
     'overflow-y-hidden text-ellipsis whitespace-nowrap',
     transitionClasses,
     {
-      'text-5xl pl-[4rem]': variant === UsernamePillVariants.Inline,
+      'pl-8 md:pl-[4rem]': variant === UsernamePillVariants.Inline,
+      [nameLengthPillFontSize]: variant === UsernamePillVariants.Inline,
       'text-3xl pl-0 mt-20': variant === UsernamePillVariants.Card,
     },
   );
 
-  const { existingTextRecords, existingTextRecordsIsLoading } = useReadBaseEnsTextRecords({
-    address: address,
-    username: username,
-  });
-
-  const selectedProfilePicture = existingTextRecords.avatar || getUserNamePicture(username);
-
   return (
     <div className={pillNameClasses}>
-      <ImageWithLoading
-        src={selectedProfilePicture}
-        alt={username}
-        title={username}
+      {isRegistering && (
+        <div className="duration-1500 absolute right-0 top-0 h-32 w-64 animate-longslide bg-gradient-to-r from-transparent via-black to-transparent opacity-30 blur-lg" />
+      )}
+      <BasenameAvatar
+        basename={username}
         wrapperClassName={avatarClasses}
-        imageClassName="object-cover w-full h-full"
-        backgroundClassName="bg-blue-500"
         width={4 * 16}
         height={4 * 16}
-        forceIsLoading={existingTextRecordsIsLoading}
       />
       <span className={userNameClasses}>{username}</span>
       {address && (

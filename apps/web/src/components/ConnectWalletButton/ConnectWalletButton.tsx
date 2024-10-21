@@ -1,62 +1,67 @@
-import { useChainModal, useConnectModal } from '@rainbow-me/rainbowkit';
+import { EthBalance, Identity, Name } from '@coinbase/onchainkit/identity';
+import {
+  ConnectWallet,
+  Wallet,
+  WalletDropdown,
+  WalletDropdownBaseName,
+  WalletDropdownDisconnect,
+  WalletDropdownLink,
+} from '@coinbase/onchainkit/wallet';
+import { base } from 'viem/chains';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { Button, ButtonSizes, ButtonVariants } from 'apps/web/src/components/Button/Button';
+import { default as BaseOrgButton } from 'apps/web/src/components/base-org/Button';
 import { UserAvatar } from 'apps/web/src/components/ConnectWalletButton/UserAvatar';
-import { ShinyButton } from 'apps/web/src/components/ShinyButton/ShinyButton';
-import sanitizeEventString from 'base-ui/utils/sanitizeEventString';
+import { Icon } from 'apps/web/src/components/Icon/Icon';
+import useBasenameChain, { supportedChainIds } from 'apps/web/src/hooks/useBasenameChain';
 import logEvent, {
   ActionType,
   AnalyticsEventImportance,
   ComponentType,
   identify,
 } from 'base-ui/utils/logEvent';
+import sanitizeEventString from 'base-ui/utils/sanitizeEventString';
 import classNames from 'classnames';
-import { useCallback, useEffect } from 'react';
-import { useAccount, useChains } from 'wagmi';
-import {
-  ConnectWallet,
-  Wallet,
-  WalletDropdown,
-  WalletDropdownLink,
-  WalletDropdownDisconnect,
-} from '@coinbase/onchainkit/wallet';
-import { Name, Identity, EthBalance } from '@coinbase/onchainkit/identity';
-import { Icon } from 'apps/web/src/components/Icon/Icon';
-import useBasenameChain from 'apps/web/src/hooks/useBasenameChain';
-import useBaseEnsName from 'apps/web/src/hooks/useBaseEnsName';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { useCopyToClipboard } from 'usehooks-ts';
+import { useAccount, useSwitchChain } from 'wagmi';
+import ChainDropdown from 'apps/web/src/components/ChainDropdown';
+import { useSearchParams } from 'next/navigation';
 
 export enum ConnectWalletButtonVariants {
-  Default,
-  Shiny,
+  BaseOrg,
+  Basename,
 }
 
 type ConnectWalletButtonProps = {
-  color: 'white' | 'black';
-  className?: string;
-  connectWalletButtonVariant?: ConnectWalletButtonVariants;
-};
-
-const colorVariant: Record<'white' | 'black', 'white' | 'black'> = {
-  white: 'white',
-  black: 'black',
+  connectWalletButtonVariant: ConnectWalletButtonVariants;
 };
 
 export function ConnectWalletButton({
-  color,
-  className,
-  connectWalletButtonVariant = ConnectWalletButtonVariants.Shiny,
+  connectWalletButtonVariant = ConnectWalletButtonVariants.BaseOrg,
 }: ConnectWalletButtonProps) {
   // Rainbow kit
   const { openConnectModal } = useConnectModal();
-  const { openChainModal } = useChainModal();
+  const { switchChain } = useSwitchChain();
+
+  const switchToIntendedNetwork = useCallback(
+    () => switchChain({ chainId: base.id }),
+    [switchChain],
+  );
+  const searchParams = useSearchParams();
+  const showChainSwitcher = searchParams?.get('showChainSwitcher');
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Wagmi
   const { address, connector, isConnected, isConnecting, isReconnecting, chain } = useAccount();
-  const chains = useChains();
-  const chainSupported = !!chain && chains.includes(chain);
+  const chainSupported = !!chain && supportedChainIds.includes(chain.id);
   const { basenameChain } = useBasenameChain();
-
-  const { data: baseName, isLoading } = useBaseEnsName({ address });
+  const [, copy] = useCopyToClipboard();
+  const copyAddress = useCallback(() => void copy(address ?? ''), [address, copy]);
 
   useEffect(() => {
     if (address) {
@@ -67,12 +72,13 @@ export function ConnectWalletButton({
           context: 'navbar',
           address,
           wallet_type: sanitizeEventString(connector?.name),
+          wallet_connector_id: connector?.id,
         },
         AnalyticsEventImportance.low,
       );
       identify({ userId: address });
     }
-  }, [address, connector?.name]);
+  }, [address, connector]);
 
   const clickConnect = useCallback(() => {
     openConnectModal?.();
@@ -87,21 +93,21 @@ export function ConnectWalletButton({
     );
   }, [openConnectModal]);
 
-  const userAddressClasses = classNames('text-lg', {
-    'text-white': color === 'white',
-    'text-black': color === 'black',
+  const userAddressClasses = classNames('text-lg font-display hidden lg:inline-block', {
+    'text-white': connectWalletButtonVariant === ConnectWalletButtonVariants.BaseOrg,
+    'text-black': connectWalletButtonVariant === ConnectWalletButtonVariants.Basename,
   });
 
-  if (isConnecting || isReconnecting) {
+  if (isConnecting || isReconnecting || !isMounted) {
     return <Icon name="spinner" color="currentColor" />;
   }
 
   if (!isConnected) {
-    const shinyButton = connectWalletButtonVariant === ConnectWalletButtonVariants.Shiny;
-    return shinyButton ? (
-      <ShinyButton variant={colorVariant[color]} onClick={clickConnect}>
+    const baseOrgButton = connectWalletButtonVariant === ConnectWalletButtonVariants.BaseOrg;
+    return baseOrgButton ? (
+      <BaseOrgButton onClick={clickConnect} roundedFull>
         Connect
-      </ShinyButton>
+      </BaseOrgButton>
     ) : (
       <Button
         variant={ButtonVariants.Black}
@@ -116,57 +122,50 @@ export function ConnectWalletButton({
 
   if (!chainSupported) {
     return (
-      <button className="px-2 py-1" onClick={openChainModal} type="button">
-        Wrong network
-      </button>
+      <Button
+        variant={ButtonVariants.Black}
+        size={ButtonSizes.Small}
+        onClick={switchToIntendedNetwork}
+        rounded
+      >
+        Connect to Base
+      </Button>
     );
   }
 
-  const onchainKitDropdownClasse = classNames(
-    'cursor-pointer bg-ock-default active:bg-ock-default-active hover:bg-ock-default-hover',
-    'flex items-center gap-2 px-4 py-2',
-  );
-
   return (
     <Wallet>
-      <ConnectWallet withWalletAggregator className="bg-transparent p-2 hover:bg-gray-40/20">
-        <UserAvatar />
-        <Name chain={basenameChain} className={userAddressClasses} />
-      </ConnectWallet>
-      <WalletDropdown>
-        <Identity className={classNames('px-4 pb-2 pt-3', className)} hasCopyAddressOnClick>
+      <ConnectWallet
+        withWalletAggregator
+        className="flex items-center justify-center rounded-xl bg-transparent p-2 hover:bg-gray-40/20"
+      >
+        <div className="flex items-center gap-2">
           <UserAvatar />
-          <Name chain={basenameChain} />
-          <EthBalance />
-        </Identity>
-        {!isLoading && baseName && (
-          <Link href={`/name/${baseName}`} className={onchainKitDropdownClasse}>
-            <div className="flex w-full flex-row items-center gap-2">
-              <span className="pl-1 text-blue-500">
-                <Icon name="blueCircle" color="currentColor" height="0.8rem" width="0.8rem" />
-              </span>
-              <span>Go to your profile</span>
-            </div>
-          </Link>
-        )}
+          <Name chain={basenameChain} className={userAddressClasses} />
+          {showChainSwitcher && <ChainDropdown />}
+        </div>
+      </ConnectWallet>
 
-        {!isLoading && !baseName && (
-          <Link href="/names" className={onchainKitDropdownClasse}>
-            <div className="flex w-full flex-row items-center gap-2">
-              <span className="pl-1 text-blue-500">
-                <Icon name="blueCircle" color="currentColor" height="0.8rem" width="0.8rem" />
-              </span>
-              <span>Claim a Basename</span>
-              <span className="ml-auto animate-pulse pt-[2px] text-xs	font-bold	tracking-widest text-blue-500">
-                NEW
-              </span>
-            </div>
-          </Link>
-        )}
-        <WalletDropdownLink icon="wallet" href="https://wallet.coinbase.com">
+      <WalletDropdown className="rounded-xl bg-white font-sans shadow-md">
+        <Identity className="px-4 pb-2 pt-3 font-display">
+          <UserAvatar />
+          <Name
+            onClick={copyAddress}
+            chain={basenameChain}
+            className="cursor-pointer font-display transition-all hover:opacity-65"
+          />
+          <EthBalance className="font-display" />
+        </Identity>
+        <WalletDropdownBaseName className="font-display hover:bg-gray-40/20" />
+        <WalletDropdownLink
+          icon="wallet"
+          href="https://wallet.coinbase.com"
+          target="_blank"
+          className="font-display hover:bg-gray-40/20"
+        >
           Go to Wallet Dashboard
         </WalletDropdownLink>
-        <WalletDropdownDisconnect />
+        <WalletDropdownDisconnect className="font-display hover:bg-gray-40/20" />
       </WalletDropdown>
     </Wallet>
   );
